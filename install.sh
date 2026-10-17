@@ -155,7 +155,6 @@ step "systemd unit: headless-power.service"
 cat > /etc/systemd/system/headless-power.service <<'EOF'
 [Unit]
 Description=Headless power saving (dGPU off, display off, tunables, charge limit)
-After=multi-user.target
 
 [Service]
 Type=oneshot

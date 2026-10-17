@@ -49,3 +49,33 @@ for the activity thresholds, status commands, and how to disable it.
 - **Not included (don't work on this model):** EFI `gpu-power-prefs` variable
   (firmware rejects the write), SATA ALPM (Apple SSD controller returns
   "Operation not supported").
+
+## Installed fixes (2026-10-17)
+
+- Display shutdown: removed `After=multi-user.target` from
+  `headless-power.service`, resolving its ordering cycle with `wowlan.service`.
+  The service completed successfully and both backlight readings were `0`,
+  including with the lid open. The GPU readiness delay remains in place.
+- Wake-on-WLAN: wake from deep suspend worked using Home Assistant with Wi-Fi MAC
+  `f4:5c:89:92:f2:b9`, broadcast `192.168.0.255`, UDP port `9`.
+  `/usr/local/sbin/enable-wowlan` finds the current radio through
+  `/sys/class/net/wlp4s0/phy80211`, enables device wake, and enables magic-packet
+  wake. `wowlan.service` invokes it at boot; the executable
+  `/usr/lib/systemd/system-sleep/enable-wowlan` hook invokes it before suspend.
+
+These permanent files are installed on the Mac. The successful HA wake test used
+a manual enable on the current radio; repeated suspend cycles and reboot behavior
+with the installed hook have not yet been verified.
+
+To apply the same fixes to an existing setup:
+
+```sh
+bash ./fix-display-boot.sh
+bash ./fix-wowlan.sh
+```
+
+Both scripts back up replaced files and require sudo. `install.sh` includes the
+display ordering fix, but still masks suspend by default and does not install
+WoWLAN. This Mac has `sleep.target` and `suspend.target` unmasked and the separate
+idle-suspend service enabled; lid closure remains ignored. See
+[FINDINGS.md](FINDINGS.md) for the record.

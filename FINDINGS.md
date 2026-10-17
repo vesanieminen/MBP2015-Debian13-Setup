@@ -100,46 +100,37 @@ The MBP has no Ethernet port, so it would need an adapter:
 Ethernet is only worth it for reliability and latency, not power. If you do switch,
 use USB and disable Wi-Fi.
 
-## Wake-on-WLAN + suspend (investigated, not done yet)
+## Wake-on-WLAN + suspend (verified 2026-10-17)
 
-The idea: suspend to RAM when the agents are idle (roughly 1 W instead of 9 W),
-and wake over Wi-Fi with a magic packet, for example from Home Assistant's
-*Wake on LAN* integration.
+Deep suspend and timer resume worked with 60-second and 120-second RTC alarms.
+Wake from deep suspend using Home Assistant also worked after enabling
+magic-packet wake on the current Wi-Fi radio. Verified HA settings:
 
-| Requirement | Status |
+| Setting | Value |
 |---|---|
-| Wi-Fi firmware WoWLAN (`iw list`) | ✅ magic packet, pattern match (16 × 1–128 B), wake on disconnect |
-| ACPI wakeup (`/proc/acpi/wakeup`) | ✅ `ARPT` (Wi-Fi, `0000:04:00.0`) and root port `RP03` enabled |
-| PCI wakeup (`power/wakeup`) | ✅ enabled on the Wi-Fi card |
-| Suspend-to-RAM (`/sys/power/mem_sleep`) | ✅ `deep` (S3) |
-| WoWLAN setting | ❌ disabled by default |
-| Suspend | ❌ masked by `install.sh` on purpose |
+| Wi-Fi interface | `wlp4s0` |
+| Wi-Fi MAC | `f4:5c:89:92:f2:b9` |
+| Broadcast address | `192.168.0.255` |
+| UDP port | `9` |
 
-Potential gain: about 8 W for every hour asleep. At 12 h/day that's roughly 35 kWh/year.
+Permanent configuration installed on the Mac:
 
-Risks and open questions:
-- **Resume on this Mac is untested.** `headless-power.service` only runs at boot. It would
-  need a `systemd-sleep` hook to re-apply the dGPU `OFF`, backlight 0 and tunables after
-  resume. Given the boot-time switcheroo deadlock, a bad resume could leave the machine
-  unreachable until someone presses the power button.
-- Some access points drop broadcast magic packets to clients in power save. A directed
-  (unicast) magic packet to the Mac's IP/MAC is more reliable.
-- Agents don't run and SSH doesn't answer while it's suspended, so it needs an idle rule
-  (for example no SSH sessions and no agent processes for 30 min) to trigger the suspend.
+- `/usr/local/sbin/enable-wowlan` discovers the radio through
+  `/sys/class/net/wlp4s0/phy80211`, writes `enabled` to the Wi-Fi device's
+  `power/wakeup`, and enables magic-packet wake with `iw`.
+- `wowlan.service` invokes that helper at boot, after `headless-power.service`.
+- `/usr/lib/systemd/system-sleep/enable-wowlan` invokes the helper before each
+  suspend, using the current radio rather than a fixed radio number.
+- `sleep.target` and `suspend.target` are unmasked; lid closure remains ignored.
+- `headless-power.service` no longer has `After=multi-user.target`, resolving its
+  ordering cycle with WoWLAN. Its script retains the GPU readiness delay. The
+  service completed successfully and both backlight readings were `0` with the
+  lid open.
 
-Test plan, with someone next to the Mac:
-
-```sh
-sudo systemctl unmask sleep.target suspend.target
-sudo iw phy phy0 wowlan enable magic-packet
-sudo systemctl suspend
-# from another machine / Home Assistant:
-wakeonlan -i <mac-ip> <wlp4s0-mac>      # or HA wake_on_lan
-# after wake, check: dGPU "Off" in vgaswitcheroo, backlight 0, Wi-Fi reconnected
-```
-
-If it resumes cleanly, add the resume hook, WoWLAN enable and idle-suspend rule to
-`install.sh`. The WoWLAN setting doesn't persist; set it at boot or with a udev rule.
+The installed fixes are reproducible with `fix-display-boot.sh` and
+`fix-wowlan.sh`. The successful HA wake test used a manual enable on the current
+radio. Repeated suspend cycles and reboot behavior with the installed hook have
+not yet been verified.
 
 ## Open items
 
@@ -149,7 +140,10 @@ If it resumes cleanly, add the resume hook, WoWLAN enable and idle-suspend rule 
   power-off would need further investigation (for example the ACPI force-power methods).
 - **Package C-state residency:** check powertop → *Idle stats* → Package column. If it
   rarely goes below C3, something is still blocking deep idle.
-- **Wake-on-WLAN + idle suspend:** see the section above; run the manual test first.
+- **Automatic idle suspend:** `idle-suspend.service` is installed and enabled with
+  a 15-minute quiet interval. Configuration and validation are recorded in
+  [idle-suspend/README.md](idle-suspend/README.md); an actual automatic sleep/wake
+  cycle remains untested.
 - Optional: disable CPU turbo (lower peak power and heat, but slower builds).
 
 ## Useful commands
