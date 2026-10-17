@@ -1,0 +1,16 @@
+[Unit]
+Description=Suspend after 15 minutes without connections or activity
+After=systemd-logind.service network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/lib/idle-suspend/idle-suspend.py
+Restart=on-failure
+RestartSec=30
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

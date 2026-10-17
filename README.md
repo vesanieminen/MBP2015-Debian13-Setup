@@ -19,10 +19,24 @@ sudo reboot
 | Power tunables | `powertop --auto-tune`, PCIe ASPM `powersupersave`, NMI + soft-lockup watchdog off, fbcon cursor blink off, writeback 15 s |
 | SD card reader off | udev deauthorizes `05ac:8406`; its media polling kept the USB3 bus awake |
 | Bluetooth off | service disabled, `btusb`/`bluetooth` blacklisted, rfkill |
-| Never suspend | logind ignores the lid, sleep targets masked |
+| Suspend policy | base install masks sleep; `idle-suspend/` enables suspend after 15 quiet minutes; lid stays ignored |
 
 Everything runtime-related is applied at each boot by `headless-power.service`
 (`/usr/local/sbin/headless-power.sh`, config in `/etc/default/headless-power`).
+
+## Automatic idle suspend
+
+The installed `idle-suspend.service` suspends after 15 quiet minutes, staying
+awake for remote connections, active sessions, inhibitors, audio, and significant
+CPU, disk, or network activity. Install it after the base headless setup:
+
+```sh
+sudo sh idle-suspend/install.sh
+```
+
+The installer unmasks normal suspend. Reapply it after rerunning the base
+`install.sh`, which masks sleep targets. See [idle-suspend/README.md](idle-suspend/README.md)
+for the activity thresholds, status commands, and how to disable it.
 
 ## Notes
 
